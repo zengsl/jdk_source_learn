@@ -19,13 +19,14 @@ public class TestAutowired {
                 Class<?> type = field.getType();
                 Object obj;
                 try {
+
+
                     obj = type.newInstance();
                     field.set(userController, obj);
                 } catch (InstantiationException | IllegalAccessException e) {
                     e.printStackTrace();
                 }
             }
-
         });
         System.out.println(userController.getUserService());
     }
