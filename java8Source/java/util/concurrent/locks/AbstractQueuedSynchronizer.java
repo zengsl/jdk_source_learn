@@ -576,15 +576,15 @@ public abstract class AbstractQueuedSynchronizer
     static final long spinForTimeoutThreshold = 1000L;
 
     /**
-     * Inserts node into queue, initializing if necessary. See picture above.
+     * Inserts node into queue, initializing if necessary. See picture above.将节点插入队列，必要时进行初始化。见上图。
      * @param node the node to insert
-     * @return node's predecessor
+     * @return node's predecessor 返回当前节点的前驱节点
      */
     private Node enq(final Node node) {
-        for (;;) {
+        for (;;) {//自旋直到操作成功（完成初始化空的头节点或者将当前节点插入到队列尾部）
             Node t = tail;
-            if (t == null) { // Must initialize
-                if (compareAndSetHead(new Node()))
+            if (t == null) { // Must initialize 尾节点不存在，则进行第一次的初始化操作
+                if (compareAndSetHead(new Node()))// 将一个"空的节点"设置为头节点，设置成功之后将尾节点指向该头节点（初始化的时候头尾节点指向同一个位置）------- TODO 为什么要设置一个空的节点作为头节点？
                     tail = head;
             } else {
                 node.prev = t;
@@ -604,16 +604,16 @@ public abstract class AbstractQueuedSynchronizer
      */
     private Node addWaiter(Node mode) {
         Node node = new Node(Thread.currentThread(), mode);
-        // Try the fast path of enq; backup to full enq on failure
+        // Try the fast path of enq; backup to full enq on failure 先尝试快速的入队列方式，如果失败再尝试完整的入队列方式
         Node pred = tail;
         if (pred != null) {
             node.prev = pred;
             if (compareAndSetTail(pred, node)) {
-                pred.next = node;
+                pred.next = node;// 上面compareAndSetTail(pred, node)是原子操作。这里将前驱节点的next指针指向当前节点（做一个双向的链接，提升其他方面的效率），虽然不是原子操作，但是没有关系。即使此时有其他线程修改了tail节点也不会影响当前节点的前驱节点指向它
                 return node;
             }
         }
-        enq(node);
+        enq(node);// 上面的快速入队逻辑执行失败之后，尝试完整的入队操作（自旋）
         return node;
     }
 
@@ -640,7 +640,7 @@ public abstract class AbstractQueuedSynchronizer
          * If status is negative (i.e., possibly needing signal) try
          * to clear in anticipation of signalling.  It is OK if this
          * fails or if status is changed by waiting thread.
-         */
+         *///如果状态为负数(即，可能需要信号)，尝试清除预期信号。如果这失败了，或者状态被等待线程改变了，那也没关系。（我的理解：反正这个节点也没有用了，修改失败了也没什么影响）
         int ws = node.waitStatus;
         if (ws < 0)
             compareAndSetWaitStatus(node, ws, 0);
@@ -650,16 +650,16 @@ public abstract class AbstractQueuedSynchronizer
          * just the next node.  But if cancelled or apparently null,
          * traverse backwards from tail to find the actual
          * non-cancelled successor.
-         */
+         *///要释放的线程被保存在后续节点中，它通常是下一个节点。但如果取消或明显为null，则从tail向后遍历以找到实际的非取消后继器
         Node s = node.next;
         if (s == null || s.waitStatus > 0) {
             s = null;
-            for (Node t = tail; t != null && t != node; t = t.prev)
+            for (Node t = tail; t != null && t != node; t = t.prev) // 这里从尾部开始找而不从头部开始找的原因一：addWaiter中设置next指针pred.next = node;并不是原子操作，从头往后找可能会导致无法正常遍历。而前驱指针和尾节点的设置是一个原子的操作，从后往前找是更加可靠的.原因二：cancelAcquire中寻找之前有效节点的时候也是先断开前驱Prev指针。综上所述，如果是从前往后找，由于极端情况下入队的非原子操作和CANCELLED节点产生过程中断开Next指针的操作，可能会导致无法遍历所有的节点。
                 if (t.waitStatus <= 0)
                     s = t;
         }
         if (s != null)
-            LockSupport.unpark(s.thread);
+            LockSupport.unpark(s.thread);// 这里会将上面计算出来的非取消的后继节点进行唤醒，虽然这里没有将当前节点的指针移动到要唤醒的这个节点，但是在节点线程被唤醒之后，调用shouldParkAfterFailedAcquire中有对前驱节点的next指针修改为当前节点的操作。中间断开的取消状态的节点将会被GC回收，cancelAcquire调用时已经对取消节点做了相关内容的清除操作以帮助GC
     }
 
     /**
@@ -735,7 +735,7 @@ public abstract class AbstractQueuedSynchronizer
     // Utilities for various versions of acquire
 
     /**
-     * Cancels an ongoing attempt to acquire.
+     * Cancels an ongoing attempt to acquire.取消正在进行尝试的获取操作
      *
      * @param node the node
      */
@@ -746,7 +746,7 @@ public abstract class AbstractQueuedSynchronizer
 
         node.thread = null;
 
-        // Skip cancelled predecessors
+        // Skip cancelled predecessors 跳过所有被取消的前驱节点，找到"前一个非取消的节点"，并将当前节点的前驱节点指向"前一个非取消的节点"。这里修改了prev前驱指针
         Node pred = node.prev;
         while (pred.waitStatus > 0)
             node.prev = pred = pred.prev;
@@ -761,32 +761,32 @@ public abstract class AbstractQueuedSynchronizer
         // Before, we are free of interference from other threads.
         node.waitStatus = Node.CANCELLED;
 
-        // If we are the tail, remove ourselves.
+        // If we are the tail, remove ourselves. 如果当前节点是尾节点，那么将当前节点移除队列中，并将前驱节点设为尾节点
         if (node == tail && compareAndSetTail(node, pred)) {
-            compareAndSetNext(pred, predNext, null);
+            compareAndSetNext(pred, predNext, null);// 将新的尾节点（之前找到的前驱节点）的next设置为null
         } else {
-            // If successor needs signal, try to set pred's next-link
-            // so it will get one. Otherwise wake it up to propagate.
+            // If successor needs signal, try to set pred's next-link 如果后继节点需要信号，尝试设置前驱节点的next指针。
+            // so it will get one. Otherwise wake it up to propagate. 所以当前节点它将获取到一个后继节点。否则就唤醒它，让它自己去传播
             int ws;
             if (pred != head &&
                 ((ws = pred.waitStatus) == Node.SIGNAL ||
                  (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
-                pred.thread != null) {
+                pred.thread != null) { // 这段判断逻辑什么时候会为false？ 1.前驱节点为头节点 2.前驱节点状态不为SIGNAL或者修改为SIGNAL失败 3. 前驱节点的thread为null
                 Node next = node.next;
                 if (next != null && next.waitStatus <= 0)
-                    compareAndSetNext(pred, predNext, next);
+                    compareAndSetNext(pred, predNext, next);// 修改前驱节点next指针为下一个要通知的节点
             } else {
-                unparkSuccessor(node);
+                unparkSuccessor(node);//如果当前节点是head的后继节点，或者上述条件不满足，唤醒节点的后续节点(如果存在的话)
             }
-
+// cancelAcquire一直在修改next指针，并没有对prev指针做操作。这里不修改prev的原因是为了防止执行此方法的时候，前驱节点已经从队列中移除了（已经执行过Try代码块中的shouldParkAfterFailedAcquire方法了）。如果此时修改Prev指针，有可能会导致Prev指向另一个已经移除队列的Node，因此这块变化Prev指针不安全。 shouldParkAfterFailedAcquire方法中，会执行下面的代码，其实就是在处理Prev指针。shouldParkAfterFailedAcquire是获取锁失败的情况下才会执行，进入该方法后，说明共享资源已被获取，当前节点之前的节点都不会出现变化，因此这个时候变更Prev指针比较安全。
             node.next = node; // help GC
         }
     }
 
     /**
-     * Checks and updates status for a node that failed to acquire.
-     * Returns true if thread should block. This is the main signal
-     * control in all acquire loops.  Requires that pred == node.prev.
+     * Checks and updates status for a node that failed to acquire.检查并更新未能获取的节点的状态
+     * Returns true if thread should block.  如果线程阻塞，则返回true
+     * This is the main signal control in all acquire loops.  Requires that pred == node.prev.这是在所有的获取循环中的主要信号控制，pred 和 node.prev必须相等
      *
      * @param pred node's predecessor holding status
      * @param node the node
@@ -803,7 +803,7 @@ public abstract class AbstractQueuedSynchronizer
         if (ws > 0) {
             /*
              * Predecessor was cancelled. Skip over predecessors and
-             * indicate retry.
+             * indicate retry.前驱节点被取消了。跳过所有前驱节点并重试
              */
             do {
                 node.prev = pred = pred.prev;
@@ -833,8 +833,8 @@ public abstract class AbstractQueuedSynchronizer
      * @return {@code true} if interrupted
      */
     private final boolean parkAndCheckInterrupt() {
-        LockSupport.park(this);
-        return Thread.interrupted();
+        LockSupport.park(this); // 让当前线程进入等待状态
+        return Thread.interrupted(); // 当线程被唤醒之后还需要返回当前线程是否被中断的标志。因为当前线程不知道自己是被unpack唤醒的还史蒂夫interrupt唤醒
     }
 
     /*
@@ -848,7 +848,7 @@ public abstract class AbstractQueuedSynchronizer
 
     /**
      * Acquires in exclusive uninterruptible mode for thread already in
-     * queue. Used by condition wait methods as well as acquire.
+     * queue. Used by condition wait methods as well as acquire. 为独占不可中断模式获取已经在队列中的线程。用于条件等待方法和获取方法
      *
      * @param node the node
      * @param arg the acquire argument
@@ -857,22 +857,22 @@ public abstract class AbstractQueuedSynchronizer
     final boolean acquireQueued(final Node node, int arg) {
         boolean failed = true;
         try {
-            boolean interrupted = false;
-            for (;;) {
-                final Node p = node.predecessor();
-                if (p == head && tryAcquire(arg)) {
-                    setHead(node);
+            boolean interrupted = false;// 此状态位是用于acquire中判断是否要执行selfInterrupt()；调用中断当前线程的逻辑
+            for (;;) {// 自旋
+                final Node p = node.predecessor();// 获取前驱节点
+                if (p == head && tryAcquire(arg)) {// 如果前驱节点是头节点就尝试获取锁。
+                    setHead(node);// 如果获取锁成功，那么将队列头设为该节点，清除prev指针和thread信息，完成退出队列操作！setHead方法从名字上看像是把当前节点设置为头节点，感觉不是很好理解。我们知道队列的头节点就是一个空节点，将头节点指向该节点并且将相关信息清除，相当于就是把当前节点变成了头节点，其实这个操作就是推出队列操作。而之前的头节点会被GC（下面有帮助GC的代码）。这里并没将waitStatus清除，下面还会用到。setHead方法会断开当前节点的与前节点之间的双向指针
                     p.next = null; // help GC
                     failed = false;
                     return interrupted;
                 }
-                if (shouldParkAfterFailedAcquire(p, node) &&
-                    parkAndCheckInterrupt())
+                if (shouldParkAfterFailedAcquire(p, node) &&//p节点不是头节点或者当前锁被占用，判断当前线程是否需要阻塞。前驱节点的waitStatus是否为SIGNAL
+                    parkAndCheckInterrupt()) // 挂起当前线程，防止因死循环导致CPU资源被浪费
                     interrupted = true;
             }
         } finally {
             if (failed)
-                cancelAcquire(node);
+                cancelAcquire(node);//取消正在进行的获取尝试(acquireQueued产生异常则取消当前线程尝试获取锁的操作,比如：tryAcquire方法中state+1溢出了，就会取消当前线程获取锁资源的请求)
         }
     }
 
@@ -1249,7 +1249,7 @@ public abstract class AbstractQueuedSynchronizer
 
     /**
      * Releases in exclusive mode.  Implemented by unblocking one or
-     * more threads if {@link #tryRelease} returns true.
+     * more threads if {@link #tryRelease} returns true.                //如果{@link tryRelease}返回true，则通过解除一个或多个线程的阻塞实现
      * This method can be used to implement method {@link Lock#unlock}.
      *
      * @param arg the release argument.  This value is conveyed to
@@ -1258,9 +1258,9 @@ public abstract class AbstractQueuedSynchronizer
      * @return the value returned from {@link #tryRelease}
      */
     public final boolean release(int arg) {
-        if (tryRelease(arg)) {
+        if (tryRelease(arg)) {// 计算和修改state，清除独占资源的线程信息等
             Node h = head;
-            if (h != null && h.waitStatus != 0)
+            if (h != null && h.waitStatus != 0) // 判断头节点状态没有被还原过，表示还没有进行后继节点的释放通知操作，则进行释放通知操作
                 unparkSuccessor(h);
             return true;
         }

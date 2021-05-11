@@ -1,4 +1,4 @@
-package com.zzz.test.lock;
+package com.zzz.test.juc.lock;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
