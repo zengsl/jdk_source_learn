@@ -385,7 +385,7 @@ public abstract class AbstractQueuedSynchronizer
 
         /** waitStatus value to indicate thread has cancelled */
         static final int CANCELLED =  1;
-        /** waitStatus value to indicate successor's thread needs unparking */
+        /** waitStatus value to indicate successor's thread needs unparking 表示后继节点需要被唤醒(阻塞状态)*/
         static final int SIGNAL    = -1;
         /** waitStatus value to indicate thread is waiting on condition */
         static final int CONDITION = -2;
@@ -785,7 +785,7 @@ public abstract class AbstractQueuedSynchronizer
 
     /**
      * Checks and updates status for a node that failed to acquire.检查并更新未能获取的节点的状态
-     * Returns true if thread should block.  如果线程阻塞，则返回true
+     * Returns true if thread should block.  如果线程应该阻塞，则返回true
      * This is the main signal control in all acquire loops.  Requires that pred == node.prev.这是在所有的获取循环中的主要信号控制，pred 和 node.prev必须相等
      *
      * @param pred node's predecessor holding status
@@ -803,7 +803,7 @@ public abstract class AbstractQueuedSynchronizer
         if (ws > 0) {
             /*
              * Predecessor was cancelled. Skip over predecessors and
-             * indicate retry.前驱节点被取消了。跳过所有前驱节点并重试
+             * indicate retry.大于0的都是取消状态，前驱节点被取消了。跳过所有前驱节点并重试
              */
             do {
                 node.prev = pred = pred.prev;
@@ -834,7 +834,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     private final boolean parkAndCheckInterrupt() {
         LockSupport.park(this); // 让当前线程进入等待状态
-        return Thread.interrupted(); // 当线程被唤醒之后还需要返回当前线程是否被中断的标志。因为当前线程不知道自己是被unpack唤醒的还史蒂夫interrupt唤醒
+        return Thread.interrupted(); // 当线程被唤醒之后还需要返回当前线程是否被中断的标志。因为当前线程不知道自己是被unpack唤醒的还是被interrupt唤醒
     }
 
     /*
@@ -849,13 +849,13 @@ public abstract class AbstractQueuedSynchronizer
     /**
      * Acquires in exclusive uninterruptible mode for thread already in
      * queue. Used by condition wait methods as well as acquire. 为独占不可中断模式获取已经在队列中的线程。用于条件等待方法和获取方法
-     *
+     * acquireQueued方法可以对排队中的线程进行“获锁”操作。
      * @param node the node
      * @param arg the acquire argument
      * @return {@code true} if interrupted while waiting
      */
     final boolean acquireQueued(final Node node, int arg) {
-        boolean failed = true;
+        boolean failed = true;// 标记是否成功拿到资源
         try {
             boolean interrupted = false;// 此状态位是用于acquire中判断是否要执行selfInterrupt()；调用中断当前线程的逻辑
             for (;;) {// 自旋
@@ -1517,7 +1517,7 @@ public abstract class AbstractQueuedSynchronizer
         Node h = head;
         Node s;
         return h != t &&
-            ((s = h.next) == null || s.thread != Thread.currentThread());
+            ((s = h.next) == null || s.thread != Thread.currentThread());// CLH变种队列中，头节点是一个虚节点。当h!=t时：如果h.next==null，等待队列正在有线程进行初始化，但只进行到了Tail指向Head，没有将Head指向Tail，此时队列中有元素，需要返回True。节点入队代码是先设置加入节点的prev，入队不是原子操作，所以会出现短暂的head!=tail，此时Tail指向最后一个节点，而且Tail指向Head。这个是为了解决极端情况下的并发问题。
     }
 
 
