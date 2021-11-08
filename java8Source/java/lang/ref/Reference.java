@@ -209,11 +209,11 @@ public abstract class Reference<T> {
 
         // Fast path for cleaners
         if (c != null) {
-            c.clean();
+            c.clean();// 调用Cleaner实例的clean方法执行相关清理操作
             return true;
         }
 
-        ReferenceQueue<? super Object> q = r.queue;
+        ReferenceQueue<? super Object> q = r.queue;// 非Cleaner对象则放入引用队列
         if (q != ReferenceQueue.NULL) q.enqueue(r);
         return true;
     }

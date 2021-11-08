@@ -280,7 +280,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
             // state must be re-read after nulling runner to prevent
             // leaked interrupts
             int s = state;
-            if (s >= INTERRUPTING)//// 如果被中断，则说明调用的cancel(true)。这里要保证在cancel方法中把state设置为INTERRUPTED,否则可能在cancel方法中还没执行中断，造成中断的泄露
+            if (s >= INTERRUPTING)// 如果被中断，则说明调用的cancel(true)。这里要保证在cancel方法中把state设置为INTERRUPTED,否则可能在cancel方法中还没执行中断，造成中断的泄露
                 handlePossibleCancellationInterrupt(s);
         }
     }
@@ -291,7 +291,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * computation encounters an exception or is cancelled.  This is
      * designed for use with tasks that intrinsically execute more
      * than once.
-     * 与run()类似，执行计算而不设置其结果，然后将这个future重置为初始状态，如果计算遇到异常或被取消，则不这样做。它被设计用于本质上执行不止一次的任务
+     * 与run()类似，执行计算而不设置其结果，然后将这个future重置为初始状态，如果计算遇到异常或被取消，则不这样做。它被设计用于本质上执行不止一次的任务（ScheduleThreadPoolExecutor中有使用）
      * @return {@code true} if successfully run and reset
      */
     protected boolean  runAndReset() {

@@ -91,7 +91,7 @@ class DirectByteBuffer
                 // Paranoia
                 return;
             }
-            unsafe.freeMemory(address);
+            unsafe.freeMemory(address);// Cleaner实例调用run方法时会触发Deallocator的run方法进行内存释放操作
             address = 0;
             Bits.unreserveMemory(size, capacity);
         }
@@ -124,19 +124,19 @@ class DirectByteBuffer
 
         long base = 0;
         try {
-            base = unsafe.allocateMemory(size);
+            base = unsafe.allocateMemory(size);// 使用unsafe类来分配堆外内存
         } catch (OutOfMemoryError x) {
             Bits.unreserveMemory(size, cap);
             throw x;
         }
-        unsafe.setMemory(base, size, (byte) 0);
+        unsafe.setMemory(base, size, (byte) 0);// 进行内存初始化
         if (pa && (base % ps != 0)) {
             // Round up to page boundary
             address = base + ps - (base & (ps - 1));
         } else {
             address = base;
         }
-        cleaner = Cleaner.create(this, new Deallocator(base, size, cap));
+        cleaner = Cleaner.create(this, new Deallocator(base, size, cap));// 构建Cleaner对象用于跟踪DirectByteBuffer对象的垃圾回收，以实现当DirectByteBuffer被垃圾回收时，分配的堆外内存一起被释放
         att = null;
 
 

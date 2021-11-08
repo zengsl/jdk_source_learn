@@ -1591,7 +1591,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * new tasks are executed. This method will return {@code false}
      * if all core threads have already been started.
      *
-     * @return {@code true} if a thread was started
+     * @return {@code true} if a thread was started 预启动一个核心线程
      */
     public boolean prestartCoreThread() {
         return workerCountOf(ctl.get()) < corePoolSize &&
@@ -1600,7 +1600,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
     /**
      * Same as prestartCoreThread except arranges that at least one
-     * thread is started even if corePoolSize is 0.
+     * thread is started even if corePoolSize is 0. 确保至少有一个非核心的工作线程，即使核心线程数为0
      */
     void ensurePrestart() {
         int wc = workerCountOf(ctl.get());
